@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Image Transcriber</title>
+  <link rel="stylesheet" href="sidepanel.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+        </div>
+        <div class="brand-info">
+          <h1>Gemini Image Transcriber</h1>
+          <span class="version-tag">Verbatim OCR Batch</span>
+        </div>
+      </div>
+      <div id="bridgeBadge" class="badge badge-offline">
+        <span class="dot"></span>
+        <span id="bridgeStatusText">Bridge Offline</span>
+      </div>
+    </header>
+
+    <!-- Folder Configuration Card -->
+    <section class="card config-card">
+      <div class="card-header">
+        <h2>Folder Configuration</h2>
+        <button id="btnRefreshHealth" class="btn-icon" title="Check Bridge Health">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label for="imagesDirInput">Images Folder Path</label>
+        <div class="input-with-action">
+          <input type="text" id="imagesDirInput" placeholder="/path/to/images" autocomplete="off" spellcheck="false">
+        </div>
+        <span class="hint">Directory containing image files (.jpg, .jpeg, .png, .webp, .gif, .bmp)</span>
+      </div>
+
+      <div class="form-group">
+        <label for="transcriptDirInput">Transcripts Output Folder Path</label>
+        <div class="input-with-action">
+          <input type="text" id="transcriptDirInput" placeholder="/path/to/plain_transcribed" autocomplete="off" spellcheck="false">
+        </div>
+        <span class="hint">One .txt per image will be saved here (basename matches).</span>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group half">
+          <label for="batchSizeInput">Images per Gemini message</label>
+          <select id="batchSizeInput">
+            <option value="1">1 (safest)</option>
+            <option value="3">3</option>
+            <option value="5">5</option>
+            <option value="10" selected>10 (recommended)</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
+          </select>
+        </div>
+        <div class="form-group half">
+          <label for="newChatEveryInput">Auto new chat every</label>
+          <select id="newChatEveryInput">
+            <option value="0">Never (same chat)</option>
+            <option value="1">1 batch</option>
+            <option value="3" selected>3 batches</option>
+            <option value="5">5 batches</option>
+            <option value="10">10 batches</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="btnScanFolder" class="btn btn-secondary w-full">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        Scan Folder
+      </button>
+
+      <div class="toggle-row">
+        <label class="toggle-item" title="Brings the Gemini window to the front before each batch. Reliable, but takes focus periodically.">
+          <input type="checkbox" id="focusTabToggle" checked>
+          <span>Keep Gemini tab visible during batch</span>
+        </label>
+        <span class="hint">Chrome throttles hidden tabs. Turn off only if you keep the window on screen yourself.</span>
+      </div>
+    </section>
+
+    <!-- Metrics Bar -->
+    <section class="metrics-grid">
+      <div class="metric-card">
+        <span class="metric-label">Total</span>
+        <span id="metricTotal" class="metric-value">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Completed</span>
+        <span id="metricDone" class="metric-value text-success">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Skipped</span>
+        <span id="metricSkipped" class="metric-value text-warning">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Remaining</span>
+        <span id="metricRemaining" class="metric-value text-info">0</span>
+      </div>
+    </section>
+
+    <!-- Overall Progress -->
+    <section class="card progress-card">
+      <div class="progress-info">
+        <span id="progressStatusLabel">Ready to begin</span>
+        <span id="progressPercentage">0%</span>
+      </div>
+      <div class="progress-track">
+        <div id="progressBar" class="progress-fill" style="width: 0%"></div>
+      </div>
+    </section>
+
+    <!-- Active Batch Card -->
+    <section id="activeFileCard" class="card active-card hidden">
+      <div class="active-header">
+        <div class="pulsing-indicator"></div>
+        <div class="active-title-group">
+          <span class="active-tag">CURRENT BATCH</span>
+          <h3 id="activeBatchLabel">Batch</h3>
+        </div>
+      </div>
+
+      <div class="active-meta">
+        <span id="activeBatchMeta">0 images</span>
+      </div>
+
+      <div id="activeBatchList" class="batch-chip-list"></div>
+
+      <!-- Pipeline Step Tracker -->
+      <div class="pipeline-tracker">
+        <div id="stepAttach" class="step-item">
+          <div class="step-circle">1</div>
+          <span>Attach</span>
+        </div>
+        <div class="step-line"></div>
+        <div id="stepGemini" class="step-item">
+          <div class="step-circle">2</div>
+          <span>Gemini</span>
+        </div>
+        <div class="step-line"></div>
+        <div id="stepSplit" class="step-item">
+          <div class="step-circle">3</div>
+          <span>Split</span>
+        </div>
+        <div class="step-line"></div>
+        <div id="stepSave" class="step-item">
+          <div class="step-circle">4</div>
+          <span>Save TXT</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Output Preview -->
+    <section class="card live-viewer-card">
+      <div class="viewer-header">
+        <div class="viewer-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 17 10 11 4 5"/>
+            <line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          Live Verbatim Output Monitor
+        </div>
+        <button id="btnClearPreview" class="btn-text">Clear</button>
+      </div>
+      <div id="transcriptPreview" class="terminal-body">
+        <span class="terminal-placeholder">Live transcription output will stream here as each batch completes...</span>
+      </div>
+    </section>
+
+    <!-- Action Control Deck -->
+    <section class="controls-card">
+      <button id="btnStartBatch" class="btn btn-primary btn-large">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        Start Batch Transcription
+      </button>
+      <button id="btnPauseBatch" class="btn btn-warning btn-large hidden">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="6" y="4" width="4" height="16"/>
+          <rect x="14" y="4" width="4" height="16"/>
+        </svg>
+        Pause
+      </button>
+      <button id="btnStopBatch" class="btn btn-danger btn-large hidden" title="Stop immediately">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="5" y="5" width="14" height="14"/>
+        </svg>
+        Stop
+      </button>
+    </section>
+
+    <section class="controls-secondary">
+      <button id="btnSkipBatch" class="btn btn-secondary" disabled title="Skip current batch (mark as failed and move on)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="5 4 15 12 5 20 5 4"/>
+          <line x1="19" y1="5" x2="19" y2="19"/>
+        </svg>
+        Skip Batch
+      </button>
+      <button id="btnNewChat" class="btn btn-secondary" title="Start a fresh Gemini chat in the target tab">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          <line x1="12" y1="8" x2="12" y2="14"/>
+          <line x1="9" y1="11" x2="15" y2="11"/>
+        </svg>
+        New Chat
+      </button>
+    </section>
+
+    <!-- Queue List -->
+    <section class="card queue-card">
+      <div class="queue-header">
+        <h3>Image Files Queue</h3>
+        <span id="queueCountBadge" class="count-badge">0 images</span>
+      </div>
+      <div id="queueContainer" class="queue-list">
+        <div class="empty-state">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          <p>Provide a folder path and click <strong>Scan Folder</strong> to populate image files.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer Help -->
+    <footer class="footer">
+      <p>Target: <a href="https://gemini.google.com" target="_blank">gemini.google.com</a> (Keep active tab open)</p>
+    </footer>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
